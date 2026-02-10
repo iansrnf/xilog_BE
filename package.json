@@ -1,13 +1,11 @@
 {
-  "name": "nest-pi-push-backend",
-  "version": "0.1.0",
+  "name": "nest-multipi-backend",
+  "version": "1.1.0",
   "private": true,
-  "description": "NestJS WebSocket backend: Raspberry Pi pushes to /device, frontend subscribes to /stream.",
   "scripts": {
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
-    "build": "nest build",
-    "lint": "eslint \"{src,test}/**/*.ts\" --fix"
+    "build": "nest build"
   },
   "dependencies": {
     "@nestjs/common": "10.4.8",
@@ -21,14 +19,8 @@
   },
   "devDependencies": {
     "@nestjs/cli": "10.4.9",
-    "@nestjs/schematics": "10.2.3",
     "@types/node": "20.14.10",
     "@types/ws": "8.5.12",
-    "eslint": "8.57.0",
-    "eslint-config-prettier": "9.1.0",
-    "eslint-plugin-prettier": "5.2.1",
-    "prettier": "3.3.3",
-    "ts-node": "10.9.2",
     "typescript": "5.5.4"
   }
 }
