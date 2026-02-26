@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class HubService {
   private last = new Map<string, any>();
+  private deviceSockets = new Map<string, any>();
 
   // deviceId -> subscribers
   private perDevice = new Map<string, Set<any>>();
@@ -45,6 +46,28 @@ export class HubService {
 
   unsubscribeAll(ws: any) {
     this.all.delete(ws);
+  }
+
+  registerDevice(deviceId: string, ws: any) {
+    this.deviceSockets.set(deviceId, ws);
+  }
+
+  unregisterDevice(deviceId: string, ws: any) {
+    const current = this.deviceSockets.get(deviceId);
+    if (current === ws) this.deviceSockets.delete(deviceId);
+  }
+
+  sendToDevice(deviceId: string, payload: any): boolean {
+    const ws = this.deviceSockets.get(deviceId);
+    if (!ws || ws.readyState !== ws.OPEN) return false;
+
+    const data = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    try {
+      ws.send(data);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private safeSend(ws: any, data: string) {

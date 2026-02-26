@@ -9,6 +9,11 @@ export class DeviceGateway implements OnGatewayConnection {
     const url = new URL(req.url, 'http://localhost');
     const deviceId = url.searchParams.get('deviceId');
     if (!deviceId) return client.close();
+    this.hub.registerDevice(deviceId, client);
+
+    client.on('close', () => {
+      this.hub.unregisterDevice(deviceId, client);
+    });
 
     client.on('message', (data: any) => {
       try {
