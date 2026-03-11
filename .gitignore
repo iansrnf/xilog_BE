@@ -25,3 +25,4 @@ lerna-debug.log*
 pi/
 *.zip
 package-lock.json
+.vscode/

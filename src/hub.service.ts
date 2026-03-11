@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { XilogLoggerService } from './xilog-logger.service';
 
 @Injectable()
 export class HubService {
@@ -11,8 +12,11 @@ export class HubService {
   // subscribers to ALL devices
   private all = new Set<any>();
 
+  constructor(private readonly xilogLoggerService: XilogLoggerService) {}
+
   publish(deviceId: string, msg: any) {
     this.last.set(deviceId, msg);
+    void this.xilogLoggerService.saveForwardedData(msg);
     const data = JSON.stringify(msg);
 
     const subs = this.perDevice.get(deviceId);
