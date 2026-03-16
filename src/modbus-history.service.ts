@@ -43,10 +43,10 @@ export class ModbusHistoryService {
               waterlevel,
               flowmeter,
               volume,
-              logged_at AS "loggedAt"
+              datetime AS "loggedAt"
             FROM ${target.tableName}
-            WHERE logged_at BETWEEN $1 AND $2
-            ORDER BY logged_at ASC, id ASC
+            WHERE datetime BETWEEN $1 AND $2
+            ORDER BY datetime ASC, id ASC
           `
         : `
             SELECT
@@ -57,10 +57,10 @@ export class ModbusHistoryService {
               turbidity,
               humidity,
               chlorine,
-              logged_at AS "loggedAt"
+              datetime AS "loggedAt"
             FROM ${target.tableName}
-            WHERE logged_at BETWEEN $1 AND $2
-            ORDER BY logged_at ASC, id ASC
+            WHERE datetime BETWEEN $1 AND $2
+            ORDER BY datetime ASC, id ASC
           `;
 
     const result = await this.database.query(query, [
