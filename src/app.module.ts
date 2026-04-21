@@ -8,6 +8,8 @@ import { ModbusHistoryService } from './modbus-history.service';
 import { ModbusHistoryController } from './modbus-history.controller';
 import { XilogLoggerService } from './xilog-logger.service';
 import { XilogHistoryController } from './xilog-history.controller';
+import { ModbusStreamService } from './modbus-stream.service';
+import { ModbusGateway } from './modbus.gateway';
 
 @Module({
   controllers: [XilogHistoryController, ModbusHistoryController],
@@ -15,10 +17,12 @@ import { XilogHistoryController } from './xilog-history.controller';
     DatabaseService,
     ModbusPollerService,
     ModbusHistoryService,
+    ModbusStreamService,
     XilogLoggerService,
     HubService,
     DeviceGateway,
     StreamGateway,
+    ModbusGateway,
   ],
 })
 export class AppModule {}

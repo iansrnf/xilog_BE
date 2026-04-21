@@ -6,6 +6,10 @@ import {
 } from '@nestjs/common';
 import ModbusRTU from 'modbus-serial';
 import { DatabaseService } from './database.service';
+import {
+  ModbusStreamMessage,
+  ModbusStreamService,
+} from './modbus-stream.service';
 
 type StationFormat = 'scaled-16' | 'float-32';
 type StationKind = 'station' | 'reservoir';
@@ -79,7 +83,10 @@ export class ModbusPollerService implements OnModuleInit, OnModuleDestroy {
   private timer: NodeJS.Timeout | null = null;
   private polling = false;
 
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly modbusStream: ModbusStreamService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     await this.ensureTables();
@@ -226,6 +233,7 @@ export class ModbusPollerService implements OnModuleInit, OnModuleDestroy {
           logged_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
       `);
+      await this.ensureLoggedAtColumn(tableName);
     }
 
     await this.database.query(`
@@ -236,6 +244,46 @@ export class ModbusPollerService implements OnModuleInit, OnModuleDestroy {
         volume DOUBLE PRECISION NULL,
         logged_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
+    `);
+    await this.ensureLoggedAtColumn('ps1_tank_scada');
+  }
+
+  private async ensureLoggedAtColumn(tableName: string): Promise<void> {
+    await this.database.query(`
+      ALTER TABLE ${tableName}
+      ADD COLUMN IF NOT EXISTS logged_at TIMESTAMPTZ
+    `);
+
+    const hasDatetimeColumn = await this.database.query<{ exists: boolean }>(
+      `
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = $1
+            AND column_name = 'datetime'
+        ) AS exists
+      `,
+      [tableName],
+    );
+
+    if (hasDatetimeColumn.rows[0]?.exists) {
+      await this.database.query(`
+        UPDATE ${tableName}
+        SET logged_at = COALESCE(logged_at, datetime, NOW())
+        WHERE logged_at IS NULL
+      `);
+    } else {
+      await this.database.query(`
+        UPDATE ${tableName}
+        SET logged_at = NOW()
+        WHERE logged_at IS NULL
+      `);
+    }
+
+    await this.database.query(`
+      ALTER TABLE ${tableName}
+      ALTER COLUMN logged_at SET DEFAULT NOW()
     `);
   }
 
@@ -265,11 +313,13 @@ export class ModbusPollerService implements OnModuleInit, OnModuleDestroy {
       const values = this.decodeRegisters(station.format, registers);
 
       if (station.kind === 'reservoir') {
-        await this.insertReservoirRecord(station.tableName, values);
+        const message = await this.insertReservoirRecord(station, values);
+        this.modbusStream.publish(station.name, message);
         return;
       }
 
-      await this.insertStationRecord(station.tableName, values);
+      const message = await this.insertStationRecord(station, values);
+      this.modbusStream.publish(station.name, message);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Polling failed for ${station.name} (${station.host}): ${reason}`);
@@ -305,43 +355,70 @@ export class ModbusPollerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async insertStationRecord(
-    tableName: string,
+    station: StationConfig,
     values: number[],
-  ): Promise<void> {
+  ): Promise<ModbusStreamMessage> {
     const payload = values.slice(0, 6);
     while (payload.length < 6) payload.push(null as unknown as number);
+    const loggedAt = new Date().toISOString();
 
     await this.database.query(
       `
-        INSERT INTO ${tableName} (
+        INSERT INTO ${station.tableName} (
           waterlevel,
           pressure,
           flowmeter,
           turbidity,
           humidity,
-          chlorine
-        ) VALUES ($1, $2, $3, $4, $5, $6)
+          chlorine,
+          logged_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
       `,
-      payload,
+      [...payload, loggedAt],
     );
+
+    return {
+      device: station.name,
+      kind: station.kind,
+      tableName: station.tableName,
+      waterlevel: payload[0] ?? null,
+      pressure: payload[1] ?? null,
+      flowmeter: payload[2] ?? null,
+      turbidity: payload[3] ?? null,
+      humidity: payload[4] ?? null,
+      chlorine: payload[5] ?? null,
+      loggedAt,
+    };
   }
 
   private async insertReservoirRecord(
-    tableName: string,
+    station: StationConfig,
     values: number[],
-  ): Promise<void> {
+  ): Promise<ModbusStreamMessage> {
     const payload = values.slice(0, 3);
     while (payload.length < 3) payload.push(null as unknown as number);
+    const loggedAt = new Date().toISOString();
 
     await this.database.query(
       `
-        INSERT INTO ${tableName} (
+        INSERT INTO ${station.tableName} (
           waterlevel,
           flowmeter,
-          volume
-        ) VALUES ($1, $2, $3)
+          volume,
+          logged_at
+        ) VALUES ($1, $2, $3, $4)
       `,
-      payload,
+      [...payload, loggedAt],
     );
+
+    return {
+      device: station.name,
+      kind: station.kind,
+      tableName: station.tableName,
+      waterlevel: payload[0] ?? null,
+      flowmeter: payload[1] ?? null,
+      volume: payload[2] ?? null,
+      loggedAt,
+    };
   }
 }
